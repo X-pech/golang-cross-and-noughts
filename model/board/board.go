@@ -74,30 +74,6 @@ func (b Board) GetMarkers() [][]marker.Marker {
 	return result
 }
 
-func (b *Board) checkLine(xb int, yb int, xs int, ys int) bool {
-	var x = xb + xs
-	var y = yb + ys
-
-	if b.Data[xb][yb].GetMarker() == marker.EMPTY {
-		return false
-	}
-
-	for {
-		if !b.IsCorrectCoordinate(x, y) {
-			break
-		}
-
-		if b.Data[x][y].GetMarker() != b.Data[xb][yb].GetMarker() {
-			return false
-		}
-
-		x += xs
-		y += ys
-	}
-
-	return true
-}
-
 func (b *Board) EmptyRemain() int {
 	var c int = 0
 	for i := range b.Data {
@@ -111,22 +87,40 @@ func (b *Board) EmptyRemain() int {
 	return c
 }
 
-func (b *Board) IsOnFullLine(x int, y int) bool {
+func (b *Board) checkLine(xb int, yb int, xs int, ys int, ch chan<- bool) {
+	var x = xb + xs
+	var y = yb + ys
 
-	var horizontal, vertical, mainDiagonal, skewDiagonal bool = false, false, false, false
-
-	horizontal = b.checkLine(x, 0, 0, 1)
-
-	if !horizontal {
-		vertical = b.checkLine(0, y, 1, 0)
-		if !vertical && x == y {
-			mainDiagonal = b.checkLine(0, 0, 1, 1)
-		}
-
-		if !vertical && !mainDiagonal && x == b.n-y-1 {
-			skewDiagonal = b.checkLine(x, b.n-1, 1, -1)
-		}
+	if b.GetMarker(xb, yb) == marker.EMPTY {
+		ch <- false
+		return
 	}
 
-	return horizontal || vertical || mainDiagonal || skewDiagonal
+	for {
+		if !b.IsCorrectCoordinate(x, y) {
+			break
+		}
+
+		if b.GetMarker(x, y) != b.GetMarker(xb, yb) {
+			ch <- false
+			return
+
+		}
+
+		x += xs
+		y += ys
+	}
+
+	ch <- true
+}
+
+func (b *Board) IsOnFullLine(x int, y int) bool {
+	results := make(chan bool, 4)
+
+	go b.checkLine(x, 0, 0, 1, results)
+	go b.checkLine(0, y, 1, 0, results)
+	go b.checkLine(0, 0, 1, 1, results)
+	go b.checkLine(0, b.n-1, 1, -1, results)
+
+	return (<-results || <-results || <-results || <-results)
 }
